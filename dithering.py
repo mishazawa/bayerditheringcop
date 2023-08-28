@@ -75,9 +75,9 @@ def __cook_C (cop_node, plane, resolution):
 
             float dither_val = matrix[index];
 
-            out[0] = out[0] >= dither_val ? out[0] : out[0] * .5;
-            out[1] = out[1] >= dither_val ? out[1] : out[1] * .5;
-            out[2] = out[2] >= dither_val ? out[2] : out[2] * .5;
+            out[0] *= out[0] >= dither_val ? 1 /*out[0]*/ : .5;
+            out[1] *= out[1] >= dither_val ? 1 /*out[1]*/ : .5;
+            out[2] *= out[2] >= dither_val ? 1 /*out[2]*/ : .5;
 
             out += 3;
         }
@@ -112,6 +112,7 @@ def __cook_A (cop_node, plane, resolution):
         pixels = array.array("f", [0] * (resolution[0] * resolution[1]))
 
     cop_node.setPixelsOfCookingPlaneFromString(pixels)
+
 # utils
 
 def __generate_matrix(cop_node):
@@ -122,7 +123,7 @@ def __generate_matrix(cop_node):
     size = 2 ** power
     mat_len = size ** 2
 
-    values = np.matrix(__bayer_matrix(size, power))
+    values = np.matrix(__bayer_matrix(size))
     values = np.vectorize(lambda m: m / mat_len)(values)
 
     if transpose:
@@ -138,16 +139,36 @@ def __get_mat_size(cop_node):
 
 # https://gamedev.stackexchange.com/questions/130696/how-to-generate-bayer-matrix-of-arbitrary-size
 
-def __bit_reverse(x, n):
-    return int(bin(x)[2:].zfill(n)[::-1], 2)
+# def __bit_reverse(x, n):
+#     return int(bin(x)[2:].zfill(n)[::-1], 2)
 
-def __bit_interleave(x, y, n):
-    x = bin(x)[2:].zfill(n)
-    y = bin(y)[2:].zfill(n)
-    return int(''.join(''.join(i) for i in zip(x, y)), 2)
+# def __bit_interleave(x, y, n):
+#     x = bin(x)[2:].zfill(n)
+#     y = bin(y)[2:].zfill(n)
+#     return int(''.join(''.join(i) for i in zip(x, y)), 2)
 
-def bayer_entry(x, y, n):
-    return __bit_reverse(__bit_interleave(x ^ y, y, n), 2*n)
+# def bayer_entry(x, y, n):
+#     return __bit_reverse(__bit_interleave(x ^ y, y, n), 2*n)
 
-def __bayer_matrix(n, p):
-    return [[bayer_entry(x, y, p) for x in range(n)] for y in range(n)]
+# def x__bayer_matrix(n, p):
+#     return [[bayer_entry(x, y, p) for x in range(n)] for y in range(n)]
+
+# https://github.com/tromero/BayerMatrix
+
+def __bayer_matrix(size, x=0, y=0, value=0, step=1, matrix = [[]]):
+    if matrix == [[]]:
+        matrix = [[0 for i in range(size)]for i in range(size)]
+    
+    if (size == 1):
+        matrix[y][x] = value
+        return
+    
+    half = int(size/2)
+    
+    #subdivide into quad tree and call recursively
+    #pattern is TL, BR, TR, BL
+    __bayer_matrix(half, x,      y,      value+(step*0), step*4, matrix)
+    __bayer_matrix(half, x+half, y+half, value+(step*1), step*4, matrix)
+    __bayer_matrix(half, x+half, y,      value+(step*2), step*4, matrix)
+    __bayer_matrix(half, x,      y+half, value+(step*3), step*4, matrix)
+    return matrix
